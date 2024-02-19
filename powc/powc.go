@@ -34,3 +34,8 @@ func P4nzzenc128v32(bufferIn []float32, bufferOut []byte) int64 {
 	written := C.p4nzzenc128v32((*C.uint)(unsafe.Pointer(&bufferIn[0])), C.size_t(len(bufferIn)), (*C.uchar)(&bufferOut[0]), 0)
 	return int64(written)
 }
+
+func P4nzzdec128v32(bufferIn []byte, size int, bufferOut []float32) int64 {
+	written := C.p4nzzdec128v32((*C.uchar)(unsafe.Pointer(&bufferIn[0])), C.size_t(size), (*C.uint)(unsafe.Pointer(&bufferOut[0])), 0)
+	return int64(written)
+}
