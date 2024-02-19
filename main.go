@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"math"
-	"reflect"
 	"time"
 	"unsafe"
 
@@ -15,50 +14,66 @@ var width = 50
 var height = 50
 var days = 24
 var data []float32 = make([]float32, width*height*days)
-var decode = make([]float32, width*height*days)
+var dataOut []float32 = make([]float32, width*height*days)
 var buffOut = make([]byte, width*height*days*4)
 
 func init() {
 
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
 			for z := 0; z < days; z++ {
-				floatVal := float32(math.Sin((1. / 24.) * (float64(x)*float64(width) + (float64(y) * float64(height)) + float64(z))))
-				data[x*width+y] = floatVal
+				nbr := y*(width*days) + x*days + z
+				floatVal := float32(math.Sin((1. / 24.) * float64(nbr)))
+				data[nbr] = floatVal
 			}
 		}
 	}
 }
 
 func main() {
-	// fmt.Printf("%f\n", in)
-	// written := powc.P4nzenc128v32(in, buffOut)
 	start := time.Now()
 	written := powc.Fpc0enc32(data, buffOut)
-	fmt.Printf("Fpc0enc32:      data length: %d written bytes: %d time: %s\n", len(data)*4, written, time.Since(start))
+	fmt.Printf("Fpc0enc32:      data length: %d bytes, written bytes: %d, ratio: %f ,time: %s\n", len(data)*4, written, float32(written)/float32(len(data)*4), time.Since(start))
+
+	reset(buffOut)
 
 	start = time.Now()
 	written = powc.Fpdfcmenc32(data, buffOut)
-	fmt.Printf("Fpdfcmenc32:    data length: %d written bytes: %d time: %s\n", len(data)*4, written, time.Since(start))
+	fmt.Printf("Fpdfcmenc32:    data length: %d bytes, written bytes: %d, ratio: %f ,time: %s\n", len(data)*4, written, float32(written)/float32(len(data)*4), time.Since(start))
+
+	reset(buffOut)
 
 	start = time.Now()
 	written = powc.Fpfcmenc32(data, buffOut)
-	fmt.Printf("Fpfcmenc32:     data length: %d written bytes: %d time: %s\n", len(data)*4, written, time.Since(start))
+	fmt.Printf("Fpfcmenc32:     data length: %d bytes, written bytes: %d, ratio: %f ,time: %s\n", len(data)*4, written, float32(written)/float32(len(data)*4), time.Since(start))
+
+	reset(buffOut)
 
 	start = time.Now()
 	written = powc.Fpgenc32(data, buffOut)
-	fmt.Printf("Fpgenc32:       data length: %d written bytes: %d time: %s\n", len(data)*4, written, time.Since(start))
+	fmt.Printf("Fpgenc32:       data length: %d bytes, written bytes: %d, ratio: %f ,time: %s\n", len(data)*4, written, float32(written)/float32(len(data)*4), time.Since(start))
+
+	start = time.Now()
+	read := powc.Fpgdec32(buffOut, len(dataOut), dataOut)
+	fmt.Printf("Fpgdec32:       data length: %d bytes, read bytes: %d time: %s\n", len(data)*4, read, time.Since(start))
+
+	reset(buffOut)
+	reset(dataOut)
 
 	start = time.Now()
 	written = powc.P4nzzenc128v32(data, buffOut)
-	fmt.Printf("P4nzzenc128v32: data length: %d written bytes: %d time: %s\n", len(data)*4, written, time.Since(start))
+	fmt.Printf("P4nzzenc128v32: data length: %d bytes, written bytes: %d, ratio: %f ,time: %s\n", len(data)*4, written, float32(written)/float32(len(data)*4), time.Since(start))
+
+	reset(buffOut)
 
 	start = time.Now()
 	inint := ToInt32(data)
-	var int32out []uint32
-	one := intcomp.CompressInt32(inint, int32out)
-	fmt.Printf("CompressInt32:  data length: %d written bytes: %d time: %s\n", len(data)*4, len(one)*4, time.Since(start))
+	int32Compressed := intcomp.CompressInt32(inint, []uint32{})
+	fmt.Printf("CompressInt32:  data length: %d bytes, written bytes: %d, ratio: %f ,time: %s\n", len(data)*4, len(int32Compressed), float32(len(int32Compressed))/float32(len(data)), time.Since(start))
 
+	start = time.Now()
+	int32decrompressed := intcomp.UncompressInt32(int32Compressed, []int32{})
+	fmt.Printf("UnCompressInt32:  data length: %d bytes, written bytes: %d, ratio: %f ,time: %s\n", len(data)*4, len(int32decrompressed), float32(len(int32decrompressed))/float32(len(data)), time.Since(start))
 	// var int32out2 []int32
 	// out := intcomp.UncompressInt32(one, int32out2)
 	// floatout := int32tofloat32(out)
@@ -73,18 +88,11 @@ func main() {
 
 }
 
-func int32tofloat32(in []int32) []float32 {
-	p := unsafe.Pointer(&in[0])
-
-	size := len(in)
-
-	var data []float32
-	sh := (*reflect.SliceHeader)(unsafe.Pointer(&data))
-	sh.Data = uintptr(p)
-	sh.Len = size
-	sh.Cap = size
-
-	return data
+func reset[T float32 | float64 | int32 | int | byte](val []T) []T {
+	for i := 0; i < len(val); i++ {
+		val[i] = 0
+	}
+	return val
 }
 
 func ToByte(in []float32) []byte {
@@ -94,16 +102,6 @@ func ToInt32(in []float32) []int32 {
 	return unsafe.Slice((*int32)(unsafe.Pointer(&in[0])), len(in))
 }
 
-func float32toint32(in []float32) []int32 {
-	p := uintptr(unsafe.Pointer(&in[0]))
-
-	size := len(in)
-
-	var data []int32
-	sh := (*reflect.SliceHeader)(unsafe.Pointer(&data))
-	sh.Data = p
-	sh.Len = size
-	sh.Cap = size
-
-	return data
+func ToUInt32(in []float32) []uint32 {
+	return unsafe.Slice((*uint32)(unsafe.Pointer(&in[0])), len(in))
 }
